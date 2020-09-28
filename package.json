@@ -1,0 +1,25 @@
+{
+	"name": "guessdifferent",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/PeterW570/GuessDifferent.git"
+	},
+	"author": "",
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/PeterW570/GuessDifferent/issues"
+	},
+	"homepage": "https://github.com/PeterW570/GuessDifferent#readme",
+	"dependencies": {
+		"ws": "^7.3.1"
+	},
+	"devDependencies": {
+		"eslint": "^7.10.0"
+	}
+}

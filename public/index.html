@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>Guess Different</title>
+</head>
+
+<body>
+	<h1>Guess Different</h1>
+
+	<script>
+		const url = `ws://${window.location.hostname}${window.location.port ? `:${window.location.port}` : ''}`
+		const connection = new WebSocket(url)
+
+		connection.onopen = () => {
+			connection.send('Message From Client')
+		}
+
+		connection.onerror = (error) => {
+			console.log(`WebSocket error: ${error}`)
+		}
+
+		connection.onmessage = (e) => {
+			console.log(e.data)
+		}
+	</script>
+</body>
+
+</html>

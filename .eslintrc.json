@@ -1,0 +1,12 @@
+{
+	"env": {
+		"browser": true,
+		"es6": true,
+		"node": true
+	},
+	"rules": {
+		"quotes": ["error", "single"],
+		"semi": ["error", "always"],
+		"indent": ["error", "tab"]
+	}
+}
