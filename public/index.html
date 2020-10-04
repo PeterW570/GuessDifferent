@@ -3,26 +3,177 @@
 
 <head>
 	<title>Guess Different</title>
+	<style>
+		*,
+		*::before,
+		*::after {
+			position: relative;
+			box-sizing: border-box;
+		}
+
+		@keyframes spinner {
+			0% {
+				transform: translate3d(-50%, -50%, 0) rotate(0deg);
+			}
+
+			100% {
+				transform: translate3d(-50%, -50%, 0) rotate(360deg);
+			}
+		}
+
+		.loading>* {
+			visibility: hidden
+		}
+
+		.loading::after {
+			animation: 1.5s linear infinite spinner;
+			animation-play-state: inherit;
+			border: solid 5px #cfd0d1;
+			border-bottom-color: #1c87c9;
+			border-radius: 50%;
+			content: "";
+			height: 40px;
+			width: 40px;
+			position: absolute;
+			top: 10px;
+			left: 20px;
+			transform: translate3d(-50%, -50%, 0);
+			will-change: transform;
+		}
+
+		.player.me {
+			color: blue;
+		}
+	</style>
 </head>
 
 <body>
-	<h1>Guess Different</h1>
+	<guess-different></guess-different>
 
 	<script>
-		const url = `ws://${window.location.hostname}${window.location.port ? `:${window.location.port}` : ''}`
-		const connection = new WebSocket(url)
+		const url = `ws://${window.location.hostname}${window.location.port ? `:${window.location.port}` : ''}`;
+		const connection = new WebSocket(url);
+		let connected = false;
+		const sendQueue = []; // in case we try to send things before connected
+		const onMessageSubscribers = new Set();
 
-		connection.onopen = () => {
-			connection.send('Message From Client')
+		let playerName = null;
+
+		const UTILS = {
+			$: {
+				addClass: ($el, className) => $el.classList.add(className),
+				removeClass: ($el, className) => $el.classList.remove(className),
+				appendHTML: ($el, htmlStr) => $el.innerHTML += htmlStr,
+				empty: ($el) => {
+					while ($el.firstChild) $el.removeChild($el.firstChild);
+				}
+			},
+			WS: {
+				send: ({ message, key }) => {
+					if (connected) connection.send(JSON.stringify({ message, key }));
+					else sendQueue.push({ message, key });
+				},
+				addSub: (sub, { key: keyToMatch, once = false }) => {
+					if (keyToMatch) {
+						function checkKey(e) {
+							const { key } = e;
+							if (key !== keyToMatch) return;
+							sub(e);
+							if (once) onMessageSubscribers.delete(checkKey);
+						}
+						onMessageSubscribers.add(checkKey);
+					}
+					else onMessageSubscribers.add(sub);
+				},
+				delSub: (sub) => onMessageSubscribers.delete(sub),
+			}
+		};
+
+		class BaseView extends HTMLElement {
+			showSpinner() {
+				UTILS.$.addClass(this, 'loading');
+				return {
+					hide: () => UTILS.$.removeClass(this, 'loading'),
+				}
+			}
 		}
 
-		connection.onerror = (error) => {
-			console.log(`WebSocket error: ${error}`)
+		class App extends BaseView {
+			connectedCallback() {
+				this.innerHTML = `
+					<h1>Guess Different</h1>
+					<choose-name></choose-name>
+					<players-view></players-view>
+				`
+				const spinner = this.showSpinner();
+
+				connection.onopen = () => {
+					spinner.hide();
+					connected = true;
+					sendQueue.forEach(d => UTILS.WS.send(d));
+				}
+
+				connection.onerror = (error) => {
+					console.log(`WebSocket error: ${error}`);
+					// TODO: show error message
+				}
+
+				connection.onmessage = (e) => {
+					console.log('On Message: ', e.data);
+					for (const sub of onMessageSubscribers) sub(JSON.parse(e.data));
+				}
+			}
 		}
 
-		connection.onmessage = (e) => {
-			console.log(e.data)
+		class ChooseNameComponent extends BaseView {
+			connectedCallback() {
+				this.innerHTML = `<form>
+					<input name="name" placeholder="Name" />
+					<button type="submit">Submit</button>
+				</form>`;
+				this.boundOnSubmitForm = this.onSubmitForm.bind(this);
+				this.querySelector('form').addEventListener('submit', this.boundOnSubmitForm);
+			}
+
+			disconnectedCallback() {
+				this.querySelector('form').removeEventListener('submit', this.boundOnSubmitForm);
+			}
+
+			onSubmitForm(e) {
+				e.preventDefault();
+				const name = this.querySelector('input').value;
+				const spinner = this.showSpinner();
+				UTILS.WS.addSub(({ message }) => {
+					if (message !== 'OK') console.error('error setting name'); // TODO: handle
+					playerName = name;
+					spinner.hide();
+					this.remove();
+				}, { key: 'set:name', once: true });
+				UTILS.WS.send({ key: 'set:name', message: name })
+			}
 		}
+
+		class PlayersComponent extends BaseView {
+			connectedCallback() {
+				this.innerHTML = `<div class="players-container"></div>`;
+				this.$container = this.querySelector('.players-container');
+
+				UTILS.WS.addSub(({ key, message: allData }) => {
+					// TODO: just update rather than empty + add
+					UTILS.$.empty(this.$container);
+					allData.forEach(d => this.addPlayer(d));
+				}, { key: 'all-players' });
+				UTILS.WS.send({ key: 'get:players' });
+			}
+			addPlayer({ name = 'Anon', score = 0 }) {
+				if (name === playerName) UTILS.$.appendHTML(this.$container, `<div class="player me">${name} (${score})</div>`);
+				else UTILS.$.appendHTML(this.$container, `<div class="player">${name} (${score})</div>`);
+			}
+		}
+
+		customElements.define('guess-different', App);
+		customElements.define('choose-name', ChooseNameComponent);
+		customElements.define('players-view', PlayersComponent);
 	</script>
 </body>
 
