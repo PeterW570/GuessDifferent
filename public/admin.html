@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8" />
+	<title>Admin</title>
+</head>
+
+<body>
+	<button id="start">Start</button>
+	<script type="module">
+		import UTILS from './scripts/utils.js';
+		UTILS.WS.connect();
+
+		document.getElementById('start').addEventListener('click', () => {
+			UTILS.WS.send({ key: 'start:quiz' });
+		});
+	</script>
+</body>
+
+</html>

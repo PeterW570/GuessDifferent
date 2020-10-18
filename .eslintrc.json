@@ -8,5 +8,9 @@
 		"quotes": ["error", "single"],
 		"semi": ["error", "always"],
 		"indent": ["error", "tab"]
+	},
+	"parserOptions": {
+		"sourceType": "module",
+		"allowImportExportEverywhere": true
 	}
 }

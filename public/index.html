@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+	<meta charset="UTF-8" />
 	<title>Guess Different</title>
 	<style>
 		*,
@@ -50,44 +51,9 @@
 <body>
 	<guess-different></guess-different>
 
-	<script>
-		const url = `ws://${window.location.hostname}${window.location.port ? `:${window.location.port}` : ''}`;
-		const connection = new WebSocket(url);
-		let connected = false;
-		const sendQueue = []; // in case we try to send things before connected
-		const onMessageSubscribers = new Set();
-
+	<script type="module">
+		import UTILS from './scripts/utils.js';
 		let playerName = null;
-
-		const UTILS = {
-			$: {
-				addClass: ($el, className) => $el.classList.add(className),
-				removeClass: ($el, className) => $el.classList.remove(className),
-				appendHTML: ($el, htmlStr) => $el.innerHTML += htmlStr,
-				empty: ($el) => {
-					while ($el.firstChild) $el.removeChild($el.firstChild);
-				}
-			},
-			WS: {
-				send: ({ message, key }) => {
-					if (connected) connection.send(JSON.stringify({ message, key }));
-					else sendQueue.push({ message, key });
-				},
-				addSub: (sub, { key: keyToMatch, once = false }) => {
-					if (keyToMatch) {
-						function checkKey(e) {
-							const { key } = e;
-							if (key !== keyToMatch) return;
-							sub(e);
-							if (once) onMessageSubscribers.delete(checkKey);
-						}
-						onMessageSubscribers.add(checkKey);
-					}
-					else onMessageSubscribers.add(sub);
-				},
-				delSub: (sub) => onMessageSubscribers.delete(sub),
-			}
-		};
 
 		class BaseView extends HTMLElement {
 			showSpinner() {
@@ -106,22 +72,21 @@
 					<players-view></players-view>
 				`
 				const spinner = this.showSpinner();
+				UTILS.WS.connect(() => spinner.hide());
 
-				connection.onopen = () => {
-					spinner.hide();
-					connected = true;
-					sendQueue.forEach(d => UTILS.WS.send(d));
-				}
+				UTILS.WS.addSub(({ message: { question, possibleAnswers } }) => {
+					UTILS.$.appendHTML(this, `<question-view></question-view>`);
+					this.querySelector('question-view').setQuestion({ question, possibleAnswers });
+				}, { key: 'new:question' })
+			}
+		}
 
-				connection.onerror = (error) => {
-					console.log(`WebSocket error: ${error}`);
-					// TODO: show error message
-				}
-
-				connection.onmessage = (e) => {
-					console.log('On Message: ', e.data);
-					for (const sub of onMessageSubscribers) sub(JSON.parse(e.data));
-				}
+		class QuestionComponent extends BaseView {
+			setQuestion({ question, possibleAnswers }) {
+				this.innerHTML = `
+				<div>${question}</div>
+				${possibleAnswers.map(ans => `<input type="radio" id="${ans}" name="question" value="${ans}" /><label for="${ans}">${ans}</label>`)}
+				`
 			}
 		}
 
@@ -174,6 +139,7 @@
 		customElements.define('guess-different', App);
 		customElements.define('choose-name', ChooseNameComponent);
 		customElements.define('players-view', PlayersComponent);
+		customElements.define('question-view', QuestionComponent);
 	</script>
 </body>
 
