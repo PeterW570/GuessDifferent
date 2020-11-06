@@ -12,6 +12,14 @@
 			box-sizing: border-box;
 		}
 
+		html,
+		body {
+			height: 100%;
+			margin: 0;
+			background-image: linear-gradient(135deg, #81FBB8 10%, #28C76F 100%);
+			font-family: system-ui, Roboto, Arial, sans-serif;
+		}
+
 		@keyframes spinner {
 			0% {
 				transform: translate3d(-50%, -50%, 0) rotate(0deg);
@@ -42,8 +50,107 @@
 			will-change: transform;
 		}
 
+		input {
+			border: 2px solid black;
+			border-radius: 4px;
+			padding: 2px;
+			background-color: rgba(255, 255, 255, 0.3);
+			font-size: 1.5rem;
+		}
+
+		button {
+			border: 2px solid black;
+			border-radius: 4px;
+			padding: 2px 6px;
+			background-color: rgba(255, 255, 255, 0.8);
+			font-size: 1rem;
+		}
+
+		.text-center {
+			text-align: center;
+		}
+
+		.bold {
+			font-weight: bold;
+		}
+
+		.font-l {
+			font-size: 1.2rem;
+		}
+
+		.font-xl {
+			font-size: 1.5rem;
+		}
+
+		guess-different {
+			display: grid;
+			grid-template-areas: "title""main""players";
+			grid-template-rows: auto minmax(0, 1fr) auto;
+			height: 100%;
+			padding: 8px;
+		}
+
+		main {
+			margin: 0 auto;
+			max-width: 40rem;
+			width: 100%;
+			padding: 20px;
+		}
+
+		.time-left {
+			position: absolute;
+			right: -20px;
+			top: 8px;
+			height: 40px;
+			width: 40px;
+			border-radius: 58% 42% 53% 47% / 42% 52% 48% 58%;
+			background-image: linear-gradient(135deg, #FDEB71 10%, #F8D800 100%);
+			box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-variant-numeric: tabular-nums;
+		}
+
+		.question-container {
+			border-radius: 8px;
+			padding: 8px 12px;
+			background-color: rgba(255, 255, 255, 0.3);
+		}
+
+		.option-pair {
+			margin: 8px;
+		}
+
+		.option-pair>input {
+			margin-right: 6px;
+		}
+
+		players-view {
+			grid-area: players;
+		}
+
+		.players-container {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+			grid-gap: 8px;
+		}
+
+		.player {
+			border-radius: 50%;
+			height: 100px;
+			min-width: 50px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			text-align: center;
+			background-image: linear-gradient(135deg, #CE9FFC 10%, #7367F0 100%);
+			box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.07);
+			color: white;
+		}
+
 		.player.me {
-			color: blue;
+			background-image: linear-gradient(135deg, #8aceff 10%, #0396FF 100%);
 		}
 	</style>
 </head>
@@ -67,32 +174,53 @@
 		class App extends BaseView {
 			connectedCallback() {
 				this.innerHTML = `
-					<h1>Guess Different</h1>
-					<choose-name></choose-name>
+					<h1 class="text-center">Guess Different</h1>
+					<main>
+						<choose-name class="text-center"></choose-name>
+					</main>
 					<players-view></players-view>
 				`
 				const spinner = this.showSpinner();
 				UTILS.WS.connect(() => spinner.hide());
 
 				UTILS.WS.addSub(({ message: { question, possibleAnswers } }) => {
-					UTILS.$.appendHTML(this, `<question-view></question-view>`);
+					UTILS.$.appendHTML(this.querySelector('main'), `<question-view></question-view>`);
 					this.querySelector('question-view').setQuestion({ question, possibleAnswers });
 				}, { key: 'new:question' })
 			}
 		}
 
 		class QuestionComponent extends BaseView {
-			setQuestion({ question, possibleAnswers }) {
+			setQuestion({ question, possibleAnswers, timeForQuestion = 20 }) {
 				this.innerHTML = `
-				<div>${question}</div>
-				${possibleAnswers.map(ans => `<input type="radio" id="${ans}" name="question" value="${ans}" /><label for="${ans}">${ans}</label>`)}
+				<div class="question-container">
+					<div class="font-l bold">${question}</div>
+					<div class="option-container">
+						${possibleAnswers.map(ans => `<div class="option-pair"><input type="radio" id="${ans}" name="question" value="${ans}" /><label for="${ans}">${ans}</label></div>`).join('')}
+					</div>
+					<div class="time-left">-</div>
+				</div>
 				`
 
-				setTimeout(() => {
-					const answer = this.querySelector('input[name="question"]:checked').value;
-					UTILS.WS.send({ key: 'check:answer', message: answer });
-					this.remove();
-				}, 1000 * 20);
+				let secondsRemaining = timeForQuestion;
+				const ONE_SECOND = 1000;
+
+				function updateAfterSecond() {
+					setTimeout(() => {
+						secondsRemaining--;
+						if (secondsRemaining > 0) {
+							this.querySelector('.time-left').innerHTML = secondsRemaining;
+							updateAfterSecond.call(this);
+						}
+						else {
+							const answer = this.querySelector('input[name="question"]:checked')?.value;
+							UTILS.WS.send({ key: 'check:answer', message: answer });
+							this.remove();
+						}
+					}, ONE_SECOND);
+				}
+				this.querySelector('.time-left').innerHTML = secondsRemaining;
+				updateAfterSecond.call(this);
 			}
 		}
 
@@ -132,13 +260,14 @@
 				UTILS.WS.addSub(({ key, message: allData }) => {
 					// TODO: just update rather than empty + add
 					UTILS.$.empty(this.$container);
-					allData.forEach(d => this.addPlayer(d));
+					allData.filter(d => d.name !== 'One Admin').forEach(d => this.addPlayer(d));
 				}, { key: 'all-players' });
 				UTILS.WS.send({ key: 'get:players' });
 			}
 			addPlayer({ name = 'Anon', score = 0 }) {
-				if (name === playerName) UTILS.$.appendHTML(this.$container, `<div class="player me">${name} (${score})</div>`);
-				else UTILS.$.appendHTML(this.$container, `<div class="player">${name} (${score})</div>`);
+				const borderRadiusStr = `border-radius: ${Math.round(Math.random() * 30 + 35)}% ${Math.round(Math.random() * 30 + 35)}% ${Math.round(Math.random() * 30 + 35)}% ${Math.round(Math.random() * 30 + 35)}% / ${Math.round(Math.random() * 30 + 35)}% ${Math.round(Math.random() * 30 + 35)}% ${Math.round(Math.random() * 30 + 35)}% ${Math.round(Math.random() * 30 + 35)}%;`;
+				if (name === playerName) UTILS.$.appendHTML(this.$container, `<div class="player me" style="${borderRadiusStr}">${name} (${score})</div>`);
+				else UTILS.$.appendHTML(this.$container, `<div class="player" style="${borderRadiusStr}">${name} (${score})</div>`);
 			}
 		}
 
