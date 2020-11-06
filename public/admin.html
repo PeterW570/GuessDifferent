@@ -11,6 +11,7 @@
 	<script type="module">
 		import UTILS from './scripts/utils.js';
 		UTILS.WS.connect();
+		UTILS.WS.send({ key: 'set:name', message: 'One Admin' })
 
 		document.getElementById('start').addEventListener('click', () => {
 			UTILS.WS.send({ key: 'start:quiz' });

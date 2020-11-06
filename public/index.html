@@ -87,6 +87,12 @@
 				<div>${question}</div>
 				${possibleAnswers.map(ans => `<input type="radio" id="${ans}" name="question" value="${ans}" /><label for="${ans}">${ans}</label>`)}
 				`
+
+				setTimeout(() => {
+					const answer = this.querySelector('input[name="question"]:checked').value;
+					UTILS.WS.send({ key: 'check:answer', message: answer });
+					this.remove();
+				}, 1000 * 20);
 			}
 		}
 
@@ -114,7 +120,7 @@
 					spinner.hide();
 					this.remove();
 				}, { key: 'set:name', once: true });
-				UTILS.WS.send({ key: 'set:name', message: name })
+				UTILS.WS.send({ key: 'set:name', message: name });
 			}
 		}
 
