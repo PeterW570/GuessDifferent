@@ -8,6 +8,7 @@
 
 <body>
 	<button id="start">Start</button>
+	<button id="next">Next</button>
 	<script type="module">
 		import UTILS from './scripts/utils.js';
 		UTILS.WS.connect();
@@ -15,6 +16,10 @@
 
 		document.getElementById('start').addEventListener('click', () => {
 			UTILS.WS.send({ key: 'start:quiz' });
+		});
+
+		document.getElementById('next').addEventListener('click', () => {
+			UTILS.WS.send({ key: 'next:question' });
 		});
 	</script>
 </body>
