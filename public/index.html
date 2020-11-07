@@ -37,15 +37,15 @@
 		.loading::after {
 			animation: 1.5s linear infinite spinner;
 			animation-play-state: inherit;
-			border: solid 5px #cfd0d1;
+			border: solid 5px white;
 			border-bottom-color: #1c87c9;
 			border-radius: 50%;
 			content: "";
 			height: 40px;
 			width: 40px;
 			position: absolute;
-			top: 10px;
-			left: 20px;
+			top: 50%;
+			left: 50%;
 			transform: translate3d(-50%, -50%, 0);
 			will-change: transform;
 		}
@@ -82,6 +82,14 @@
 			font-size: 1.5rem;
 		}
 
+		.mt-8 {
+			margin-top: 8px;
+		}
+
+		.mt-16 {
+			margin-top: 16px;
+		}
+
 		guess-different {
 			display: grid;
 			grid-template-areas: "title""main""players";
@@ -92,9 +100,20 @@
 
 		main {
 			margin: 0 auto;
-			max-width: 40rem;
+			max-width: 50rem;
 			width: 100%;
 			padding: 20px;
+			display: flex;
+			flex-direction: column;
+		}
+
+		.waiting,
+		question-view,
+		question-results,
+		quiz-results {
+			display: block;
+			margin: auto;
+			width: 100%;
 		}
 
 		.time-left {
@@ -124,6 +143,59 @@
 
 		.option-pair>input {
 			margin-right: 6px;
+		}
+
+		.question-results-container {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+			grid-gap: 10px;
+		}
+
+		.question-results-container>div {
+			border-radius: 8px;
+			padding: 8px 12px;
+		}
+
+		.question-results-container>.correct {
+			background-color: rgba(255, 255, 255, 0.3);
+		}
+
+		.question-results-container>.incorrect {
+			background-color: rgba(0, 0, 0, 0.1);
+		}
+
+		.question-results-container .players:empty::after {
+			content: "None";
+			opacity: 0.4;
+		}
+
+		.podium {
+			display: grid;
+			grid-template-areas:
+				"first first"
+				"second third";
+			grid-gap: 8px;
+			text-align: center;
+		}
+
+		.podium>div {
+			border-radius: 8px;
+			padding: 24px;
+			background-color: rgba(255, 255, 255, 0.3);
+		}
+
+		.podium .first {
+			grid-area: first;
+			background-color: #ecc94b;
+		}
+
+		.podium .second {
+			background-color: #cbd5e0;
+		}
+
+		.podium .third {
+			background-color: #b7791f;
+			color: white;
 		}
 
 		players-view {
@@ -177,16 +249,42 @@
 					<h1 class="text-center">Guess Different</h1>
 					<main>
 						<choose-name class="text-center"></choose-name>
+						<div class="waiting text-center">Waiting for Question</div>
 					</main>
 					<players-view></players-view>
 				`
 				const spinner = this.showSpinner();
 				UTILS.WS.connect(() => spinner.hide());
 
+				let $waiting = this.querySelector('.waiting');
+
+				function cleanup() {
+					if ($waiting) $waiting.remove();
+					if (questionView) questionView.remove();
+					if (questionResultsView) questionResultsView.remove();
+				}
+
+				let questionView = null;
+				let questionResultsView = null;
 				UTILS.WS.addSub(({ message: { question, possibleAnswers } }) => {
+					cleanup();
 					UTILS.$.appendHTML(this.querySelector('main'), `<question-view></question-view>`);
-					this.querySelector('question-view').setQuestion({ question, possibleAnswers });
+					questionView = this.querySelector('question-view');
+					questionView.setQuestion({ question, possibleAnswers });
 				}, { key: 'new:question' })
+
+				UTILS.WS.addSub(({ message }) => {
+					cleanup();
+					UTILS.$.appendHTML(this.querySelector('main'), `<question-results></question-results>`);
+					questionResultsView = this.querySelector('question-results');
+					questionResultsView.setResults(message);
+				}, { key: 'question-results' });
+
+				UTILS.WS.addSub(({ message }) => {
+					cleanup();
+					UTILS.$.appendHTML(this.querySelector('main'), `<quiz-results></quiz-results>`);
+					this.querySelector('quiz-results').setResults(message);
+				}, { key: 'game-over', once: true });
 			}
 		}
 
@@ -200,7 +298,15 @@
 					</div>
 					<div class="time-left">-</div>
 				</div>
-				`
+				`;
+
+				function onInputChange() {
+					const answer = this.querySelector('input[name="question"]:checked')?.value;
+					UTILS.WS.send({ key: 'selected:answer', message: answer });
+				}
+				const boundListener = onInputChange.bind(this);
+				const radios = document.getElementsByName("question");
+				for (const radio of radios) radio.addEventListener('change', boundListener);
 
 				let secondsRemaining = timeForQuestion;
 				const ONE_SECOND = 1000;
@@ -213,14 +319,56 @@
 							updateAfterSecond.call(this);
 						}
 						else {
-							const answer = this.querySelector('input[name="question"]:checked')?.value;
-							UTILS.WS.send({ key: 'check:answer', message: answer });
-							this.remove();
+							this.querySelector('.time-left').innerHTML = 0;
+							for (const radio of radios) {
+								radio.disabled = true;
+								radio.removeEventListener('change', boundListener);
+							}
 						}
 					}, ONE_SECOND);
 				}
 				this.querySelector('.time-left').innerHTML = secondsRemaining;
 				updateAfterSecond.call(this);
+			}
+		}
+
+		class QuestionResultsComponent extends BaseView {
+			setResults({ correct, incorrect }) {
+				this.innerHTML = `
+				<div class="question-results-container text-center">
+					<div class="correct">
+						<span class="font-l bold">Correct</span>
+						<div class="players mt-8">${correct.map(d => `<div>${d.name || 'Anon'}</div>`).join('')}</div>
+					</div>
+					<div class="incorrect">
+						<span class="font-l bold">Incorrect</span>
+						<div class="players mt-8">${incorrect.map(d => `<div>${d.name || 'Anon'}</div>`).join('')}</div>
+					</div>
+				</div>
+				`;
+			}
+		}
+
+		class QuizResultsComponent extends BaseView {
+			setResults(results) {
+				const [
+					first,
+					second,
+					third,
+				] = results;
+				let podiumHtml = `<div class="first">
+					<span>${first.name}</span>
+					<span>(${first.score})</span>
+				</div>`;
+				if (second) podiumHtml += `<div class="second">
+					<span>${second.name}</span>
+					<span>(${second.score})</span>
+				</div>`;
+				if (third) podiumHtml += `<div class="third">
+					<span>${third.name}</span>
+					<span>(${third.score})</span>
+				</div>`;
+				this.innerHTML = `<div class="podium">${podiumHtml}</div>`;
 			}
 		}
 
@@ -275,6 +423,8 @@
 		customElements.define('choose-name', ChooseNameComponent);
 		customElements.define('players-view', PlayersComponent);
 		customElements.define('question-view', QuestionComponent);
+		customElements.define('question-results', QuestionResultsComponent);
+		customElements.define('quiz-results', QuizResultsComponent);
 	</script>
 </body>
 
