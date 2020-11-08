@@ -7,7 +7,7 @@
 	"rules": {
 		"quotes": ["error", "single"],
 		"semi": ["error", "always"],
-		"indent": ["error", "tab"]
+		"indent": ["error", "tab", { "SwitchCase": 1 }]
 	},
 	"parserOptions": {
 		"sourceType": "module",
