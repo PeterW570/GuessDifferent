@@ -266,11 +266,12 @@
 
 				let questionView = null;
 				let questionResultsView = null;
-				UTILS.WS.addSub(({ message: { question, possibleAnswers } }) => {
+				UTILS.WS.addSub(({ message: { type, question, possibleAnswers } }) => {
 					cleanup();
-					UTILS.$.appendHTML(this.querySelector('main'), `<question-view></question-view>`);
-					questionView = this.querySelector('question-view');
-					questionView.setQuestion({ question, possibleAnswers });
+					const elTagName = `${type}-question-view`;
+					UTILS.$.appendHTML(this.querySelector('main'), `<${elTagName}></${elTagName}>`);
+					questionView = this.querySelector(elTagName);
+					questionView.setQuestion({ type, question, possibleAnswers });
 				}, { key: 'new:question' })
 
 				UTILS.WS.addSub(({ message }) => {
@@ -289,24 +290,10 @@
 		}
 
 		class QuestionComponent extends BaseView {
-			setQuestion({ question, possibleAnswers, timeForQuestion = 20 }) {
-				this.innerHTML = `
-				<div class="question-container">
-					<div class="font-l bold">${question}</div>
-					<div class="option-container">
-						${possibleAnswers.map(ans => `<div class="option-pair"><input type="radio" id="${ans}" name="question" value="${ans}" /><label for="${ans}">${ans}</label></div>`).join('')}
-					</div>
-					<div class="time-left">-</div>
-				</div>
-				`;
-
-				function onInputChange() {
-					const answer = this.querySelector('input[name="question"]:checked')?.value;
-					UTILS.WS.send({ key: 'selected:answer', message: answer });
-				}
-				const boundListener = onInputChange.bind(this);
-				const radios = document.getElementsByName("question");
-				for (const radio of radios) radio.addEventListener('change', boundListener);
+			setQuestion({ type, question, possibleAnswers, timeForQuestion = 20 }) {
+				UTILS.$.addClass(this, 'question-view');
+				this.setInnerHTML({ type, question, possibleAnswers });
+				this.setupInputListener();
 
 				let secondsRemaining = timeForQuestion;
 				const ONE_SECOND = 1000;
@@ -320,15 +307,68 @@
 						}
 						else {
 							this.querySelector('.time-left').innerHTML = 0;
-							for (const radio of radios) {
-								radio.disabled = true;
-								radio.removeEventListener('change', boundListener);
-							}
+							this.timerFinished();
 						}
 					}, ONE_SECOND);
 				}
 				this.querySelector('.time-left').innerHTML = secondsRemaining;
 				updateAfterSecond.call(this);
+			}
+		}
+
+		class MultiChoiceQuestionComponent extends QuestionComponent {
+			setInnerHTML({ type, question, possibleAnswers }) {
+				this.innerHTML = `
+					<div class="question-container">
+						<div class="font-l bold">${question}</div>
+						<div class="option-container">
+							${possibleAnswers.map(ans => `<div class="option-pair"><input type="radio" id="${ans}" name="question" value="${ans}" /><label for="${ans}">${ans}</label></div>`).join('')}
+						</div>
+						<div class="time-left">-</div>
+					</div>
+				`;
+			}
+			setupInputListener() {
+				function onInputChange() {
+					const answer = this.querySelector('input[name="question"]:checked')?.value;
+					UTILS.WS.send({ key: 'updated:answer', message: answer });
+				}
+				this.boundListener = onInputChange.bind(this);
+				this.radios = document.getElementsByName("question");
+				for (const radio of this.radios) radio.addEventListener('change', this.boundListener);
+			}
+			timerFinished() {
+				for (const radio of this.radios) {
+					radio.disabled = true;
+					radio.removeEventListener('change', this.boundListener);
+				}
+			}
+		}
+
+		class UniqueQuestionComponent extends QuestionComponent {
+			setInnerHTML({ type, question, possibleAnswers }) {
+				this.innerHTML = `
+					<div class="question-container">
+						<div class="font-l bold">${question}</div>
+						<div class="input-container mt-8">
+							<input class="unique-answer-input"></input>
+						</div>
+						<div class="time-left">-</div>
+					</div>
+				`;
+			}
+			setupInputListener() {
+				this.inputEl = document.querySelector(".unique-answer-input");
+				function onInputChange() {
+					const answer = this.inputEl.value;
+					UTILS.WS.send({ key: 'updated:answer', message: answer });
+				}
+				this.boundListener = onInputChange.bind(this);
+				this.inputEl.addEventListener('keyup', this.boundListener);
+			}
+			timerFinished() {
+				this.inputEl.disabled = true;
+				this.inputEl.removeEventListener('keyup', this.boundListener);
 			}
 		}
 
@@ -422,7 +462,8 @@
 		customElements.define('guess-different', App);
 		customElements.define('choose-name', ChooseNameComponent);
 		customElements.define('players-view', PlayersComponent);
-		customElements.define('question-view', QuestionComponent);
+		customElements.define('multi-choice-question-view', MultiChoiceQuestionComponent);
+		customElements.define('unique-question-view', UniqueQuestionComponent);
 		customElements.define('question-results', QuestionResultsComponent);
 		customElements.define('quiz-results', QuizResultsComponent);
 	</script>
